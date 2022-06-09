@@ -5,12 +5,35 @@ const app = express()
 // require handlebars
 app.use(express.static('public'));
 
-// Middleware
-const { engine } = require('express-handlebars');
+const exphbs = require('express-handlebars');
+const Handlebars = require('handlebars');
+const {allowInsecurePrototypeAccess} = require('@handlebars/allow-prototype-access');
 
-app.engine('handlebars', engine());
+const hbs = exphbs.create({
+  handlebars: allowInsecurePrototypeAccess(Handlebars),
+  defaultLayout: 'main',
+  helpers: {
+      if_eq: function (a, b, opts) {
+          // return a === b
+          if (a === b) {
+              return opts.fn(this);
+          }
+          return opts.inverse(this);
+      },
+  },
+});
+
+app.engine('handlebars', hbs.engine);
 app.set('view engine', 'handlebars');
 app.set("views", "./views");
+
+// INITIALIZE BODY-PARSER AND ADD IT TO APP
+const bodyParser = require('body-parser');
+
+const models = require('./db/models');
+
+// The following line must appear AFTER const app = express() and before your routes!
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // OUR MOCK ARRAY OF PROJECTS
 var events = [
@@ -21,7 +44,23 @@ var events = [
 
 // INDEX
 app.get('/', (req, res) => {
-  res.render('events-index', { events: events });
+  models.Event.findAll({ order: [['createdAt', 'DESC']] }).then(events => {
+    res.render('events-index', { events: events });
+  })
+})
+
+// NEW
+app.get('/events/new', (req, res) => {
+  res.render('events-new', {});
+})
+
+// CREATE
+app.post('/events', (req, res) => {
+  models.Event.create(req.body).then(event => {
+    res.redirect(`/`);
+  }).catch((err) => {
+    console.log(err)
+  });
 })
 
 // Choose a port to listen on
